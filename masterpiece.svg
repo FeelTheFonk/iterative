@@ -42,14 +42,54 @@
       </feMerge>
     </filter>
     
+    <!-- Color Matrix Filter -->
+    <filter id="color-matrix" x="-50%" y="-50%" width="200%" height="200%">
+      <feColorMatrix type="hue" values="0.5" result="hue-shift"/>
+      <feComponentTransfer in="hue-shift" result="bright">
+        <feFuncR type="linear" slope="1.5"/>
+        <feFuncG type="linear" slope="1.5"/>
+        <feFuncB type="linear" slope="1.5"/>
+      </feComponentTransfer>
+      <feGaussianBlur stdDeviation="5" result="matrix-blur"/>
+      <feMerge>
+        <feMergeNode in="matrix-blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Composite Overlay Filter -->
+    <filter id="composite-overlay" x="-50%" y="-50%" width="200%" height="200%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="20"/>
+      <feColorMatrix type="matrix" values="1.5 0 0 0 0 0 1.5 0 0 0 0 0 1.5 0 0 0 0 0 1" result="enhanced"/>
+      <feComposite in="enhanced" in2="SourceAlpha" operator="in" result="masked"/>
+      <feGaussianBlur stdDeviation="3" result="softened"/>
+      <feMerge>
+        <feMergeNode in="softened"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
     <!-- Pattern for stars -->
     <pattern id="star-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-      <circle cx="20" cy="20" r="1" fill="#ffffff" opacity="0.6"/>
+      <circle cx="20" cy="20" r="1" fill="#ffffff" opacity="0.6">
+        <animate attributeName="opacity" values="0.3;0.8;0.3" dur="3s" repeatCount="indefinite"/>
+      </circle>
+    </pattern>
+    
+    <!-- Animated star pattern -->
+    <pattern id="star-pattern-anim" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+      <circle cx="30" cy="30" r="2" fill="#ffffff" opacity="0.5">
+        <animate attributeName="r" values="1;3;1" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite"/>
+      </circle>
     </pattern>
     
     <!-- Orbit Pattern -->
     <pattern id="orbit-pattern" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
-      <circle cx="40" cy="40" r="5" fill="none" stroke="#4a3f7a" stroke-width="1" opacity="0.4"/>
+      <circle cx="40" cy="40" r="5" fill="none" stroke="#4a3f7a" stroke-width="1" opacity="0.4">
+        <animate attributeName="r" values="4;6;4" dur="4s" repeatCount="indefinite"/>
+      </circle>
     </pattern>
     
     <!-- Bioluminescent Gradient -->
@@ -66,6 +106,20 @@
       <stop offset="100%" stop-color="#ff6b9d" stop-opacity="0.3"/>
     </linearGradient>
     
+    <!-- Vertical Wave Gradient -->
+    <linearGradient id="v-wave-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#4a3f7a" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ff6b9d" stop-opacity="0.4"/>
+    </linearGradient>
+    
+    <!-- Diagonal Gradient -->
+    <linearGradient id="diag-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00ffff"/>
+      <stop offset="50%" stop-color="#4a3f7a"/>
+      <stop offset="100%" stop-color="#ff6b9d"/>
+    </linearGradient>
+    
     <!-- Wave Pattern -->
     <path id="wave" d="M 0 30 Q 20 45 40 30 T 80 30 V 40 H 0 Z"/>
     <pattern id="wave-pattern" x="0" y="0" width="80" height="40" patternUnits="userSpaceOnUse">
@@ -73,9 +127,24 @@
       <use href="#wave" x="80" y="0"/>
     </pattern>
     
+    <!-- Geometric pattern -->
+    <pattern id="geo-pattern" x="0" y="0" width="50" height="50" patternUnits="userSpaceOnUse">
+      <polygon points="25,5 45,25 25,45 5,25" fill="none" stroke="#00ffff" stroke-width="0.5" opacity="0.3">
+        <animate attributeName="opacity" values="0.1;0.5;0.1" dur="5s" repeatCount="indefinite"/>
+      </polygon>
+    </pattern>
+    
     <!-- Clip Path for depth masking -->
     <clipPath id="depth-clip">
       <path d="M 0 0 L 800 0 L 800 600 L 0 600 Z"/>
+    </clipPath>
+    
+    <!-- Organic mask clip -->
+    <clipPath id="organic-clip">
+      <ellipse cx="400" cy="300" rx="250" ry="150">
+        <animate attributeName="rx" values="240;260;240" dur="10s" repeatCount="indefinite"/>
+        <animate attributeName="ry" values="140;160;140" dur="10s" repeatCount="indefinite"/>
+      </ellipse>
     </clipPath>
     
     <!-- Mask for organic overlay -->
@@ -86,9 +155,19 @@
       </circle>
     </mask>
     
+    <!-- Particle mask -->
+    <mask id="particle-mask">
+      <rect width="800" height="600" fill="#000"/>
+      <circle cx="400" cy="300" r="150" fill="#fff">
+        <animate attributeName="r" values="140;160;140" dur="6s" repeatCount="indefinite"/>
+      </circle>
+    </mask>
+    
     <!-- Symbol for particle -->
     <symbol id="particle-symbol" viewBox="0 0 20 20">
-      <circle cx="10" cy="10" r="5" fill="currentColor"/>
+      <circle cx="10" cy="10" r="5" fill="currentColor">
+        <animate attributeName="r" values="3;7;3" dur="2s" repeatCount="indefinite"/>
+      </circle>
     </symbol>
     
     <!-- Symbol for geometric shape -->
@@ -98,8 +177,24 @@
     
     <!-- Symbol for orbit point -->
     <symbol id="orbit-point" viewBox="0 0 10 10">
-      <circle cx="5" cy="5" r="3" fill="currentColor"/>
+      <circle cx="5" cy="5" r="3" fill="currentColor">
+        <animate attributeName="r" values="2;4;2" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
     </symbol>
+    
+    <!-- Pattern for nebula -->
+    <pattern id="nebula-pattern" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+      <circle cx="50" cy="50" r="30" fill="#00ffff" opacity="0.1">
+        <animate attributeName="opacity" values="0.05;0.15;0.05" dur="8s" repeatCount="indefinite"/>
+      </circle>
+    </pattern>
+    
+    <!-- Gradient for rings -->
+    <radialGradient id="ring-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#4a3f7a" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ff6b9d" stop-opacity="0.1"/>
+    </radialGradient>
   </defs>
   
   <style>
@@ -143,6 +238,19 @@
       0% { transform: rotate(0deg) translateX(150px) rotate(0deg); }
       100% { transform: rotate(360deg) translateX(150px) rotate(-360deg); }
     }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    @keyframes spiral {
+      0% { transform: rotate(0deg) translateX(100px) rotate(0deg); }
+      100% { transform: rotate(720deg) translateX(100px) rotate(-360deg); }
+    }
+    @keyframes flow {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(10px); }
+      100% { transform: translateX(0); }
+    }
   </style>
   
   <!-- Background Layer (z-far) -->
@@ -155,15 +263,31 @@
       <animate attributeName="x" values="0;-10;0" dur="20s" repeatCount="indefinite"/>
     </rect>
     
+    <!-- Animated Stars Layer -->
+    <rect width="800" height="600" fill="url(#star-pattern-anim)" opacity="0.2">
+      <animate attributeName="opacity" values="0.15;0.25;0.15" dur="6s" repeatCount="indefinite"/>
+    </rect>
+    
     <!-- Distant Nebula Clouds -->
     <circle cx="200" cy="150" r="100" fill="#00ffff" opacity="0.1" filter="url(#soft-blur)">
       <animate attributeName="opacity" values="0.08;0.15;0.08" dur="15s" repeatCount="indefinite"/>
       <animate attributeName="r" values="90;110;90" dur="15s" repeatCount="indefinite"/>
+      <animate attributeName="cx" values="200;210;200" dur="30s" repeatCount="indefinite"/>
     </circle>
     <circle cx="600" cy="450" r="120" fill="#ff6b9d" opacity="0.1" filter="url(#soft-blur)">
       <animate attributeName="opacity" values="0.1;0.2;0.1" dur="18s" repeatCount="indefinite"/>
       <animate attributeName="r" values="100;140;100" dur="18s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="450;440;450" dur="20s" repeatCount="indefinite"/>
     </circle>
+    <circle cx="400" cy="100" r="80" fill="#4a3f7a" opacity="0.08" filter="url(#soft-blur)">
+      <animate attributeName="opacity" values="0.05;0.12;0.05" dur="12s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="75;85;75" dur="12s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Nebula Pattern Layer -->
+    <rect width="800" height="600" fill="url(#nebula-pattern)" opacity="0.05">
+      <animate attributeName="opacity" values="0.03;0.07;0.03" dur="25s" repeatCount="indefinite"/>
+    </rect>
   </g>
   
   <!-- Midground - Orbit Rings -->
@@ -181,9 +305,16 @@
     <!-- Orbit Points -->
     <circle cx="650" cy="300" r="4" fill="#00ffff" opacity="0.8">
       <animateTransform attributeName="transform" type="rotate" from="0 400 300" to="360 400 300" dur="20s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite"/>
     </circle>
     <circle cx="150" cy="300" r="3" fill="#ff6b9d" opacity="0.6">
       <animateTransform attributeName="transform" type="rotate" from="360 400 300" to="0 400 300" dur="25s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Ring Gradient -->
+    <circle cx="400" cy="300" r="200" fill="url(#ring-grad)" opacity="0.1">
+      <animate attributeName="opacity" values="0.08;0.15;0.08" dur="10s" repeatCount="indefinite"/>
     </circle>
   </g>
   
@@ -209,6 +340,10 @@
     </rect>
     <rect x="600" y="400" width="20" height="20" fill="#ff6b9d" opacity="0.4">
       <animate attributeName="opacity" values="0.3;0.6;0.3" dur="4s" repeatCount="indefinite"/>
+    </rect>
+    <!-- Geometric pattern overlay -->
+    <rect x="0" y="0" width="800" height="600" fill="url(#geo-pattern)" opacity="0.15">
+      <animate attributeName="opacity" values="0.1;0.2;0.1" dur="15s" repeatCount="indefinite"/>
     </rect>
   </g>
   
@@ -285,6 +420,10 @@
     <path d="M 0 560 Q 200 580 400 560 T 800 560" fill="none" stroke="url(#wave-grad)" stroke-width="2">
       <animate attributeName="d" values="M 0 560 Q 200 580 400 560 T 800 560; M 0 565 Q 200 585 400 565 T 800 565; M 0 560 Q 200 580 400 560 T 800 560" dur="8s" repeatCount="indefinite"/>
     </path>
+    <!-- Vertical wave gradient -->
+    <rect width="800" height="100" fill="url(#v-wave-grad)" opacity="0.08">
+      <animate attributeName="opacity" values="0.05;0.12;0.05" dur="20s" repeatCount="indefinite"/>
+    </rect>
   </g>
   
   <!-- Center Glow Core -->
@@ -292,6 +431,12 @@
     <animate attributeName="opacity" values="0.4;0.8;0.4" dur="4s" repeatCount="indefinite"/>
     <animate attributeName="r" values="30;35;30" dur="3s" repeatCount="indefinite"/>
     <animate attributeName="fill" values="#00ffff;#4a3f7a;#ff6b9d;#00ffff" dur="10s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Core Ring -->
+  <circle cx="400" cy="300" r="50" fill="none" stroke="url(#bio-grad)" stroke-width="1" opacity="0.3" filter="url(#glow)">
+    <animate attributeName="r" values="48;52;48" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.25;0.35;0.25" dur="4s" repeatCount="indefinite"/>
   </circle>
   
   <!-- Subtle Motion -->
@@ -323,6 +468,60 @@
     </circle>
     <circle cx="400" cy="550" r="8" fill="#00ffff" opacity="0.6">
       <animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Additional Particles with Color Matrix Filter -->
+  <g filter="url(#color-matrix)" opacity="0.4">
+    <circle cx="300" cy="200" r="5" fill="#00ffff">
+      <animate attributeName="cx" values="300;320;300" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="200;190;200" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="500" cy="400" r="6" fill="#ff6b9d">
+      <animate attributeName="cx" values="500;480;500" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="400;410;400" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="250" cy="350" r="4" fill="#4a3f7a">
+      <animate attributeName="cx" values="250;270;250" dur="5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="350;340;350" dur="5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Composite Overlay Layer -->
+  <g filter="url(#composite-overlay)" opacity="0.25">
+    <circle cx="400" cy="300" r="100" fill="url(#bio-grad)">
+      <animate attributeName="opacity" values="0.15;0.3;0.15" dur="8s" repeatCount="indefinite"/>
+    </circle>
+    <rect x="200" y="150" width="400" height="300" fill="none" stroke="url(#diag-grad)" stroke-width="1" opacity="0.3">
+      <animate attributeName="opacity" values="0.2;0.4;0.2" dur="12s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+  
+  <!-- Dynamic Particles Layer -->
+  <g mask="url(#particle-mask)" opacity="0.6">
+    <circle cx="120" cy="180" r="3" fill="#00ffff" opacity="0.8">
+      <animate attributeName="cx" values="120;135;120" dur="2.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="180;170;180" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="680" cy="420" r="4" fill="#ff6b9d" opacity="0.7">
+      <animate attributeName="cx" values="680;665;680" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="420;430;420" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="380" cy="220" r="3" fill="#4a3f7a" opacity="0.6">
+      <animate attributeName="cx" values="380;395;380" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="220;210;220" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="520" cy="380" r="4" fill="#00ffff" opacity="0.5">
+      <animate attributeName="cx" values="520;505;520" dur="3.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="380;390;380" dur="3.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="180" cy="480" r="3" fill="#ff6b9d" opacity="0.6">
+      <animate attributeName="cx" values="180;195;180" dur="2.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="480;470;480" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="620" cy="120" r="4" fill="#4a3f7a" opacity="0.5">
+      <animate attributeName="cx" values="620;605;620" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="120;110;120" dur="3s" repeatCount="indefinite"/>
     </circle>
   </g>
 </svg>
