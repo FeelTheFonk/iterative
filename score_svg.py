@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-SVG Masterpiece Scorer — mechanical metric for animated SVG complexity/depth/beauty.
-
-Composite score (0-100) based on:
-  - Animation richness: SMIL + CSS keyframes          (0-30)
-  - Depth & layering: filters, gradients, opacity      (0-25)
-  - Visual complexity: shapes, colors, paths            (0-25)
-  - Structure quality: defs, clipPath, mask, pattern    (0-20)
+SVG Masterpiece Scorer — mechanical metric for animated SVG (0-100).
 
 Usage: python score_svg.py masterpiece.svg
-Output: SCORE: <number>
+Output last line: SCORE: <number>
 """
 
 import sys
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter
+
+
+def local_tag(el):
+    t = el.tag
+    return t.split("}")[-1] if "}" in t else t
 
 
 def score_svg(filepath: str) -> int:
@@ -27,7 +26,6 @@ def score_svg(filepath: str) -> int:
         print("SCORE: 0")
         return 1
 
-    # --- VALIDITY ---
     try:
         tree = ET.parse(filepath)
         root = tree.getroot()
@@ -37,18 +35,14 @@ def score_svg(filepath: str) -> int:
         return 1
 
     all_elements = list(root.iter())
+    tags = [local_tag(el) for el in all_elements]
+    tag_counts = Counter(tags)
 
-    def local_tag(el):
-        t = el.tag
-        return t.split("}")[-1] if "}" in t else t
-
-    # Reject <script>
-    if any(local_tag(el) == "script" for el in all_elements):
+    if "script" in tag_counts:
         print("ERROR: Contains <script>", file=sys.stderr)
         print("SCORE: 0")
         return 1
 
-    # Size guard
     size_kb = len(raw.encode("utf-8")) / 1024
     if size_kb > 500:
         print(f"ERROR: Too large ({size_kb:.0f}KB > 500KB)", file=sys.stderr)
@@ -56,8 +50,6 @@ def score_svg(filepath: str) -> int:
         return 1
 
     scores = {}
-    tag_list = [local_tag(el) for el in all_elements]
-    tag_counts = Counter(tag_list)
 
     # === 1. ANIMATION (0-30) ===
     smil_tags = {"animate", "animateTransform", "animateMotion", "animateColor", "set"}
@@ -72,9 +64,7 @@ def score_svg(filepath: str) -> int:
     # === 2. DEPTH (0-25) ===
     filter_els = tag_counts.get("filter", 0)
     fe_prims = sum(v for k, v in tag_counts.items() if k.startswith("fe"))
-    lin_grads = tag_counts.get("linearGradient", 0)
-    rad_grads = tag_counts.get("radialGradient", 0)
-    total_grads = lin_grads + rad_grads
+    total_grads = tag_counts.get("linearGradient", 0) + tag_counts.get("radialGradient", 0)
     groups = tag_counts.get("g", 0)
 
     opacities = set()
@@ -88,8 +78,7 @@ def score_svg(filepath: str) -> int:
 
     transforms = sum(1 for el in all_elements if el.get("transform"))
 
-    d = 0
-    d += min(8, filter_els * 2 + fe_prims)
+    d = min(8, filter_els * 2 + fe_prims)
     d += min(7, total_grads * 1.5)
     d += min(5, groups * 0.8)
     d += min(3, len(opacities))
@@ -116,8 +105,7 @@ def score_svg(filepath: str) -> int:
 
     path_cmds = sum(len(re.findall(r"[MmLlHhVvCcSsQqTtAaZz]", el.get("d", ""))) for el in all_elements)
 
-    c = 0
-    c += min(6, shape_types_used * 1.2)
+    c = min(6, shape_types_used * 1.2)
     c += min(7, total_shapes * 0.25)
     c += min(6, len(colors) * 0.5)
     c += min(6, path_cmds * 0.05)
@@ -128,7 +116,7 @@ def score_svg(filepath: str) -> int:
     s += 3 if "defs" in tag_counts else 0
     s += 2 if root.get("viewBox") else 0
     elem_count = len(all_elements)
-    s += 5 if 10 <= elem_count <= 500 else (2 if 5 <= elem_count < 10 else 3 if elem_count > 500 else 0)
+    s += 5 if 10 <= elem_count <= 500 else (2 if 5 <= elem_count < 10 else (3 if elem_count > 500 else 0))
     s += 3 if "style" in tag_counts else 0
     s += 2 if "clipPath" in tag_counts else 0
     s += 2 if "mask" in tag_counts else 0

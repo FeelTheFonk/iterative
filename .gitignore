@@ -1,5 +1,4 @@
 autoresearch-results.tsv
-*.backup
 output/
 .venv/
 __pycache__/

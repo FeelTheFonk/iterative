@@ -1,9 +1,9 @@
-# setup_and_run.ps1 — One-shot setup + launch autoresearch loop
-# Requires: uv, git, llama-server running on port 8001
+# setup_and_run.ps1 — Setup + launch autoresearch loop
+# Requires: uv, git, llama-server on port 8001
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host " AUTORESEARCH — SVG Masterpiece Evolution"  -ForegroundColor Cyan
+Write-Host " AUTORESEARCH - SVG Masterpiece Evolution"   -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -25,7 +25,7 @@ if (-not (Test-Path .git)) {
 
 # 3. Test scorer
 Write-Host "[3/4] Testing scorer..." -ForegroundColor Yellow
-python scripts\score_svg.py masterpiece.svg
+python score_svg.py masterpiece.svg
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Scorer failed." -ForegroundColor Red
     exit 1
@@ -38,12 +38,11 @@ try {
     Write-Host "llama-server OK" -ForegroundColor Green
 } catch {
     Write-Host "WARNING: llama-server not reachable on port 8001." -ForegroundColor Red
-    Write-Host "Start it before proceeding." -ForegroundColor Red
     Read-Host "Press Enter to continue anyway"
 }
 
 Write-Host ""
-Write-Host "Launching autoresearch loop... (Ctrl+C to stop)" -ForegroundColor Green
+Write-Host "Launching loop... (Ctrl+C to stop)" -ForegroundColor Green
 Write-Host ""
 
 python autoresearch_loop.py
