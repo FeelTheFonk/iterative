@@ -1,14 +1,19 @@
 """
-autoresearch_loop.py — Autonomous SVG evolution via llama-server API.
+autoresearch_loop.py — Autonomous SVG evolution via llama-server.
 
-Boucle infinie : Read → LLM proposes 1 change → Verify → Keep/Discard → Repeat.
-Git as memory. TSV as log. Snapshots in output/.
+Architecture (from Karpathy's autoresearch + Self-Refine):
+  1. Immutable scorer (score_svg.py) — agent cannot modify
+  2. Single mutable artifact (masterpiece.svg)
+  3. Git as memory — branch history is monotonically improving
+  4. Context compression — only current SVG + score breakdown + compressed history
+  5. Temperature scheduling — exploration early, exploitation late
+  6. Diversity injection — rotates strategy after consecutive failures
 
-Usage:  python autoresearch_loop.py
-Needs:  llama-server on localhost:8001, git in PATH
+Windows-compatible: UTF-8 git, lock file management, CREATE_NO_WINDOW.
 """
 
-import json
+import math
+import os
 import re
 import shutil
 import subprocess
@@ -19,9 +24,9 @@ from pathlib import Path
 
 import httpx
 
-# ──────────────────────────────────────────────────────────
-# CONFIG — adapt these if needed
-# ──────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────
+# CONFIG
+# ──────────────────────────────────────────────
 API_URL = "http://localhost:8001/v1/chat/completions"
 MODEL = "HauhauCS/Qwen3.5-35B-A3B"
 SVG_FILE = Path("masterpiece.svg")
@@ -29,94 +34,179 @@ SCORER = Path("score_svg.py")
 LOG_FILE = Path("autoresearch-results.tsv")
 OUTPUT_DIR = Path("output")
 SUMMARY_EVERY = 10
-API_TIMEOUT = 300
+API_TIMEOUT = 300.0
+
+# Sampling: Qwen3 recommended base, with dynamic temperature
+BASE_TEMP = 0.6
+MIN_TEMP = 0.35
+TOP_P = 0.95
+TOP_K = 20
+MIN_P = 0.05
+REPEAT_PENALTY = 1.0
+
+IS_WINDOWS = os.name == "nt"
+CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
 
 
-# ──────────────────────────────────────────────────────────
-# LLM CALL
-# ──────────────────────────────────────────────────────────
-def call_llm(prompt: str, system: str = "") -> str:
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+# ──────────────────────────────────────────────
+# GIT (Windows-safe)
+# ──────────────────────────────────────────────
+def git(*args):
+    """Run git command with proper Windows encoding and flags."""
+    try:
+        return subprocess.run(
+            ["git"] + list(args),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            cwd=str(Path.cwd()),
+            creationflags=CREATION_FLAGS,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            timeout=30,
+        )
+    except Exception as e:
+        print(f"  [GIT ERROR] {' '.join(args)}: {e}")
+        return None
 
+
+def git_init():
+    """Initialize git repo if needed, with Windows-safe config."""
+    if not Path(".git").exists():
+        git("init")
+        git("config", "core.autocrlf", "false")
+        git("config", "core.quotepath", "false")
+        git("add", "-A")
+        git("commit", "-m", "autoresearch: seed")
+        print("  Git repo initialized.")
+    else:
+        print("  Git repo found.")
+
+
+def git_commit(message):
+    """Commit current SVG. Handles stale lock files on Windows."""
+    lock = Path(".git/index.lock")
+    if lock.exists():
+        try:
+            age = time.time() - lock.stat().st_mtime
+            if age > 30:
+                lock.unlink()
+                print("  [GIT] Removed stale index.lock")
+        except OSError:
+            pass
+    git("add", str(SVG_FILE))
+    result = git("commit", "-m", message)
+    if result and result.returncode == 0:
+        return True
+    return False
+
+
+def git_revert():
+    git("checkout", "--", str(SVG_FILE))
+
+
+# ──────────────────────────────────────────────
+# LLM
+# ──────────────────────────────────────────────
+def call_llm(messages, temperature):
+    """Call llama-server with explicit sampling params and cache_prompt."""
     payload = {
         "model": MODEL,
         "messages": messages,
         "max_tokens": 16384,
-        "temperature": 0.7,
-        "top_p": 0.9,
+        "temperature": temperature,
+        "top_p": TOP_P,
+        "top_k": TOP_K,
+        "min_p": MIN_P,
+        "repeat_penalty": REPEAT_PENALTY,
+        "cache_prompt": True,
         "stream": False,
     }
-
     try:
-        r = httpx.post(API_URL, json=payload, timeout=API_TIMEOUT)
+        r = httpx.post(
+            API_URL, json=payload,
+            timeout=httpx.Timeout(API_TIMEOUT, connect=10.0),
+        )
         r.raise_for_status()
         data = r.json()
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        # Strip Qwen thinking blocks if present
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return content
     except Exception as e:
         print(f"  [LLM ERROR] {e}")
         return ""
 
 
-# ──────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────
 # SCORING
-# ──────────────────────────────────────────────────────────
-def run_scorer() -> float | None:
+# ──────────────────────────────────────────────
+def run_scorer():
+    """Run score_svg.py. Returns (score, breakdown_text) or (None, error)."""
     try:
         result = subprocess.run(
             [sys.executable, str(SCORER), str(SVG_FILE)],
-            capture_output=True, text=True, timeout=30,
-            cwd=str(Path.cwd()),
+            capture_output=True, text=True, encoding="utf-8",
+            timeout=30, cwd=str(Path.cwd()),
+            creationflags=CREATION_FLAGS,
         )
-        for line in result.stdout.splitlines():
+        stdout = result.stdout
+        score = None
+        for line in stdout.splitlines():
             if line.startswith("SCORE:"):
-                return float(line.split(":", 1)[1].strip())
-        if result.stderr:
-            print(f"  [SCORER STDERR] {result.stderr.strip()[:200]}")
-        return None
+                score = float(line.split(":", 1)[1].strip())
+
+        # Extract breakdown lines (everything before SCORE:)
+        breakdown_lines = [
+            l for l in stdout.splitlines()
+            if l.startswith(("ANIMATION:", "DEPTH:", "COMPLEXITY:", "STRUCTURE:", "DUPLICATE_PENALTY:", "SIZE:"))
+        ]
+        breakdown = "\n".join(breakdown_lines)
+
+        if score is not None:
+            return score, breakdown
+
+        err = result.stderr.strip()[:200] if result.stderr else "no SCORE line"
+        return None, err
     except Exception as e:
-        print(f"  [SCORER ERROR] {e}")
-        return None
+        return None, str(e)
 
 
-# ──────────────────────────────────────────────────────────
-# GIT
-# ──────────────────────────────────────────────────────────
-def git_commit(message: str):
-    subprocess.run(["git", "add", str(SVG_FILE)], capture_output=True)
-    subprocess.run(["git", "commit", "-m", message, "--allow-empty"], capture_output=True)
+def weakest_axis(breakdown):
+    """Parse breakdown to find the axis with most room for improvement."""
+    axes = {}
+    for line in breakdown.splitlines():
+        for name, maxval in [("ANIMATION", 30), ("DEPTH", 25), ("COMPLEXITY", 25), ("STRUCTURE", 20)]:
+            if line.startswith(name + ":"):
+                try:
+                    val = float(line.split(":")[1].split("/")[0].strip())
+                    axes[name] = (val, maxval, maxval - val)
+                except (ValueError, IndexError):
+                    pass
+    if not axes:
+        return "ANIMATION", 30.0
+    # Return axis with largest gap
+    worst = max(axes.items(), key=lambda x: x[1][2])
+    return worst[0], worst[1][2]
 
 
-def git_revert():
-    subprocess.run(["git", "checkout", "--", str(SVG_FILE)], capture_output=True)
-
-
-# ──────────────────────────────────────────────────────────
-# PARSING LLM OUTPUT
-# ──────────────────────────────────────────────────────────
-def extract_svg(response: str) -> str | None:
-    """Extract complete SVG from LLM response. Handles fenced and bare SVG."""
-    # Strategy 1: fenced code block (```svg, ```xml, ```)
-    fence_match = re.findall(r"```(?:xml|svg|html)?\s*\n(.*?)\n```", response, re.DOTALL)
-    for match in fence_match:
-        candidate = match.strip()
-        if "<svg" in candidate and "</svg>" in candidate:
-            start = candidate.index("<svg")
-            end = candidate.rindex("</svg>") + len("</svg>")
-            return candidate[start:end]
-
-    # Strategy 2: bare <svg>...</svg> anywhere in the response
-    bare_match = re.search(r"(<svg[\s\S]*?</svg>)", response)
-    if bare_match:
-        return bare_match.group(1)
-
+# ──────────────────────────────────────────────
+# SVG EXTRACTION
+# ──────────────────────────────────────────────
+def extract_svg(response):
+    """Extract complete SVG from LLM response. Multiple strategies."""
+    # Strategy 1: fenced block (```svg, ```xml, ```)
+    for m in re.findall(r"```(?:xml|svg|html)?\s*\n(.*?)\n```", response, re.DOTALL):
+        c = m.strip()
+        if "<svg" in c and "</svg>" in c:
+            return c[c.index("<svg"):c.rindex("</svg>") + 6]
+    # Strategy 2: bare <svg>...</svg>
+    m = re.search(r"(<svg\b[\s\S]*?</svg>)", response)
+    if m:
+        return m.group(1)
     return None
 
 
-def extract_description(response: str) -> str:
-    for line in response.splitlines():
+def extract_description(response):
+    for line in response.splitlines()[:10]:  # Only check first 10 lines
         ls = line.strip()
         for prefix in ("CHANGE:", "MODIFICATION:", "CHANGEMENT:"):
             if ls.upper().startswith(prefix):
@@ -124,123 +214,167 @@ def extract_description(response: str) -> str:
     return "unknown change"
 
 
-# ──────────────────────────────────────────────────────────
-# LOGGING
-# ──────────────────────────────────────────────────────────
-def log_entry(iteration: int, metric: float, delta: float, status: str, desc: str):
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{iteration}\t{metric}\t{delta:+.1f}\t{status}\t{desc}\n")
+# ──────────────────────────────────────────────
+# TEMPERATURE SCHEDULING
+# ──────────────────────────────────────────────
+def compute_temperature(best_score, consecutive_fails):
+    """Higher temp when exploring (low score or stuck), lower when exploiting (high score)."""
+    # Base: interpolate between BASE_TEMP and MIN_TEMP based on score progress
+    progress = min(1.0, best_score / 90.0)  # 90 = practical ceiling
+    temp = BASE_TEMP - (BASE_TEMP - MIN_TEMP) * progress
+    # Boost on consecutive failures (exploration kick)
+    if consecutive_fails >= 5:
+        temp = min(0.9, temp + 0.2)
+    elif consecutive_fails >= 3:
+        temp = min(0.8, temp + 0.1)
+    return round(temp, 2)
 
 
-def print_summary(iteration: int, baseline: float, best: float):
-    if not LOG_FILE.exists():
-        return
-    lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()[1:]  # skip header
-    keeps = sum(1 for l in lines if "\tkeep\t" in l)
-    discards = sum(1 for l in lines if "\tdiscard\t" in l)
-    crashes = sum(1 for l in lines if "\tcrash\t" in l)
-    skips = sum(1 for l in lines if "\tskip\t" in l)
-    last5 = [l.split("\t")[3] for l in lines[-5:]] if len(lines) >= 5 else []
+# ──────────────────────────────────────────────
+# CONTEXT COMPRESSION
+# ──────────────────────────────────────────────
+DIVERSITY_STRATEGIES = [
+    "Focus sur la dimension la plus faible identifiée ci-dessus. Un seul changement ciblé.",
+    "Essaie une technique SVG que tu n'as pas encore utilisée (animateMotion, pattern, mask, clipPath, symbol, use).",
+    "Ajoute de la profondeur : un nouveau calque (background OU midground OU foreground) avec un rythme d'animation différent.",
+    "Combine deux éléments existants avec une nouvelle interaction : un filtre qui s'applique à un groupe, un clipPath qui révèle un gradient, etc.",
+    "Changement radical : restructure les couches existantes ou remplace un élément faible par un plus riche.",
+]
 
-    print()
-    print(f"{'=' * 55}")
-    print(f"  PROGRESS — iteration {iteration}")
-    print(f"  Baseline: {baseline} -> Best: {best} (+{best - baseline:.1f})")
-    print(f"  Keeps: {keeps} | Discards: {discards} | Crashes: {crashes} | Skips: {skips}")
-    if last5:
-        print(f"  Last 5: {', '.join(last5)}")
-    print(f"{'=' * 55}")
-    print()
-
-
-# ──────────────────────────────────────────────────────────
-# SYSTEM PROMPT
-# ──────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """\
-Tu es un artiste SVG d'elite. Tu crees des oeuvres animees d'une beaute saisissante.
-Tu travailles sur un SVG unique (800x600) qui doit devenir un chef-d'oeuvre anime avec une profondeur visuelle immense.
+Tu es un artiste SVG d'elite. Tu fais evoluer un SVG anime (800x600) vers un chef-d'oeuvre visuel avec une profondeur immense.
 
-STYLE VISUEL CIBLE : scenes cosmiques, oceans bioluminescents, champs de particules abstraits,
-architectures geometriques etherees. L'oeuvre doit sembler VIVANTE.
+STYLE : scenes cosmiques, oceans bioluminescents, champs de particules, architectures geometriques etherees. L'oeuvre doit sembler VIVANTE.
 
 REGLES ABSOLUES :
-- SVG + CSS uniquement. AUCUN <script>. AUCUN JavaScript.
-- XML valide en permanence.
-- viewBox="0 0 800 600" obligatoire, width="800" height="600".
-- Max 500KB.
-- Animations via SMIL (animate, animateTransform, animateMotion) et/ou CSS @keyframes dans <style>.
+- SVG + CSS uniquement. ZERO <script>. ZERO JavaScript.
+- XML valide. viewBox="0 0 800 600" width="800" height="600".
+- Max 500KB. Pas d'elements dupliques en masse (le scorer penalise le spam).
+- Animations SMIL (animate, animateTransform, animateMotion) et/ou CSS @keyframes dans <style>.
+- Varier les durations d'animation (le scorer mesure la diversite des durations).
 
-METRIQUE DE SCORING (ce que tu optimises) :
-- Animation richness (30pts) : elements SMIL, @keyframes, proprietes animation
-- Depth & layering (25pts) : <filter>, gradients, <g> groups, opacity, transforms
-- Visual complexity (25pts) : diversite de shapes, palette couleurs, complexite des paths
-- Structure quality (20pts) : <defs>, <style>, <clipPath>, <mask>, <pattern>, <symbol>
+SCORING :
+- Animation (30pts) : elements SMIL, @keyframes, proprietes CSS animation, diversite des durations
+- Profondeur (25pts) : <filter>+fe*, gradients, <g> groups, opacity variance, transforms
+- Complexite (25pts) : types de shapes varies, couleurs PERCEPTUELLEMENT distinctes, richesse des paths
+- Structure (20pts) : <defs>, <style>, <clipPath>, <mask>, <pattern>, <symbol>, <use>
 
-TECHNIQUE DE PROFONDEUR :
-- Background (z-far) : gradients diffus, formes floues (feGaussianBlur), animations lentes (30-60s)
-- Midground : formes geometriques, elements organiques, animations moyennes (5-15s)
-- Foreground (z-near) : accents lumineux, particules fines, animations rapides (1-5s)
-- Parallaxe : couches eloignees = mouvement lent, proches = mouvement rapide
+PROFONDEUR PAR COUCHES :
+- Background (z-far) : gradients larges, feGaussianBlur, animations 30-60s
+- Midground : geometrie, formes organiques, animations 5-15s
+- Foreground (z-near) : accents lumineux, particules, animations 1-5s
 
-FORMAT DE REPONSE OBLIGATOIRE :
-CHANGE: <description en 1 phrase>
+FORMAT DE REPONSE (strict) :
+CHANGE: <1 phrase decrivant la modification>
 ```svg
-<le SVG COMPLET modifie, pas un extrait>
+<SVG COMPLET de <svg> a </svg>, pas un extrait>
 ```"""
 
 
-# ──────────────────────────────────────────────────────────
-# USER PROMPT BUILDER
-# ──────────────────────────────────────────────────────────
-def build_user_prompt(current_svg: str, best_score: float, recent_log: str) -> str:
-    return f"""Score actuel : {best_score}/100
+def build_prompt(current_svg, best_score, breakdown, history_summary, strategy_hint):
+    """Build user prompt with compressed context and actionable feedback."""
+    weak_name, weak_gap = weakest_axis(breakdown)
 
-Log des dernieres iterations :
-{recent_log}
+    return f"""Score actuel : {best_score:.1f}/100
+Dimension la plus faible : {weak_name} (marge restante : {weak_gap:.1f} points)
+
+Breakdown du scorer :
+{breakdown}
+
+Historique recent :
+{history_summary}
+
+Directive : {strategy_hint}
 
 SVG actuel :
 ```svg
 {current_svg}
 ```
 
-Fais UNE SEULE modification atomique pour ameliorer le score.
-Choisis la modification qui aura le plus d'impact sur la dimension la plus faible.
-Donne le SVG COMPLET modifie (pas un extrait, le fichier entier de <svg> a </svg>)."""
+Fais UNE SEULE modification atomique. Donne le SVG COMPLET (de <svg> a </svg>)."""
 
 
-# ──────────────────────────────────────────────────────────
+def compress_history(log_path, max_entries=8):
+    """Compress log to last N entries as one-liners. Context-efficient."""
+    if not log_path.exists():
+        return "(aucun historique)"
+    lines = log_path.read_text(encoding="utf-8").strip().splitlines()[1:]  # skip header
+    if not lines:
+        return "(aucun historique)"
+    recent = lines[-max_entries:]
+    summary = []
+    for line in recent:
+        parts = line.split("\t")
+        if len(parts) >= 5:
+            it, metric, delta, status, desc = parts[0], parts[1], parts[2], parts[3], parts[4]
+            symbol = {"keep": "+", "discard": "-", "crash": "X", "skip": "?", "baseline": "="}
+            s = symbol.get(status, "?")
+            summary.append(f"  [{s}] #{it} {metric} ({delta}) {desc[:60]}")
+    return "\n".join(summary) if summary else "(aucun historique)"
+
+
+# ──────────────────────────────────────────────
+# LOGGING
+# ──────────────────────────────────────────────
+def init_log():
+    if not LOG_FILE.exists():
+        LOG_FILE.write_text("iteration\tmetric\tdelta\tstatus\tdescription\n", encoding="utf-8")
+
+
+def log_entry(iteration, metric, delta, status, desc):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{iteration}\t{metric}\t{delta:+.1f}\t{status}\t{desc}\n")
+
+
+def print_summary(iteration, baseline, best):
+    if not LOG_FILE.exists():
+        return
+    lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()[1:]
+    keeps = sum(1 for l in lines if "\tkeep\t" in l)
+    discards = sum(1 for l in lines if "\tdiscard\t" in l)
+    crashes = sum(1 for l in lines if "\tcrash\t" in l)
+    skips = sum(1 for l in lines if "\tskip\t" in l)
+
+    print()
+    print(f"{'=' * 60}")
+    print(f"  PROGRESS — iteration {iteration}")
+    print(f"  Baseline: {baseline} -> Best: {best} (+{best - baseline:.1f})")
+    print(f"  Keeps: {keeps} | Discards: {discards} | Crashes: {crashes} | Skips: {skips}")
+    if keeps + discards > 0:
+        print(f"  Keep rate: {keeps / (keeps + discards) * 100:.0f}%")
+    print(f"{'=' * 60}")
+    print()
+
+
+# ──────────────────────────────────────────────
 # MAIN LOOP
-# ──────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────
 def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
-
-    if not LOG_FILE.exists():
-        with open(LOG_FILE, "w", encoding="utf-8") as f:
-            f.write("iteration\tmetric\tdelta\tstatus\tdescription\n")
-
-    if not Path(".git").exists():
-        subprocess.run(["git", "init"], capture_output=True)
-        subprocess.run(["git", "add", "-A"], capture_output=True)
-        subprocess.run(["git", "commit", "-m", "autoresearch: seed"], capture_output=True)
+    init_log()
+    git_init()
 
     # Baseline
-    baseline = run_scorer()
-    if baseline is None or baseline == 0:
-        print("FATAL: Cannot score seed SVG. Check that masterpiece.svg and score_svg.py exist.")
+    baseline_score, baseline_breakdown = run_scorer()
+    if baseline_score is None or baseline_score == 0:
+        print(f"FATAL: Cannot score seed SVG: {baseline_breakdown}")
         sys.exit(1)
 
-    print(f"\n{'=' * 55}")
+    print(f"\n{'=' * 60}")
     print(f"  AUTORESEARCH — SVG Masterpiece Evolution")
-    print(f"  Baseline: {baseline}/100")
-    print(f"  Model: {MODEL}")
-    print(f"  API: {API_URL}")
+    print(f"  Baseline:  {baseline_score}/100")
+    print(f"  Model:     {MODEL}")
+    print(f"  API:       {API_URL}")
     print(f"  Ctrl+C to stop")
-    print(f"{'=' * 55}\n")
+    print(f"{'=' * 60}")
+    print(f"\n{baseline_breakdown}\n")
 
-    log_entry(0, baseline, 0.0, "baseline", "initial seed")
-    best = baseline
+    log_entry(0, baseline_score, 0.0, "baseline", "initial seed")
+    best = baseline_score
+    best_breakdown = baseline_breakdown
     iteration = 0
     consecutive_fails = 0
+    strategy_idx = 0
 
     try:
         while True:
@@ -248,45 +382,53 @@ def main():
             ts = datetime.now().strftime("%H:%M:%S")
 
             current_svg = SVG_FILE.read_text(encoding="utf-8")
+            history_summary = compress_history(LOG_FILE)
 
-            log_lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
-            recent_log = "\n".join(log_lines[-15:]) if len(log_lines) > 1 else "(aucune)"
+            # Temperature scheduling
+            temp = compute_temperature(best, consecutive_fails)
 
-            print(f"  [{ts}] #{iteration} calling LLM (score: {best})...", end=" ", flush=True)
+            # Strategy rotation on consecutive failures
+            if consecutive_fails >= 3:
+                strategy_idx = (strategy_idx + 1) % len(DIVERSITY_STRATEGIES)
+            strategy = DIVERSITY_STRATEGIES[strategy_idx % len(DIVERSITY_STRATEGIES)]
+
+            prompt = build_prompt(current_svg, best, best_breakdown, history_summary, strategy)
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ]
+
+            print(f"  [{ts}] #{iteration} T={temp} (score:{best}) ...", end=" ", flush=True)
             t0 = time.time()
-            response = call_llm(
-                build_user_prompt(current_svg, best, recent_log),
-                system=SYSTEM_PROMPT,
-            )
+            response = call_llm(messages, temp)
             elapsed = time.time() - t0
 
             if not response:
-                print(f"empty response ({elapsed:.0f}s)")
+                print(f"empty ({elapsed:.0f}s)")
                 log_entry(iteration, 0, 0, "skip", "empty LLM response")
                 consecutive_fails += 1
-                if consecutive_fails > 5:
-                    print("  Too many consecutive fails, waiting 30s...")
-                    time.sleep(30)
+                if consecutive_fails > 6:
+                    time.sleep(15)
                 continue
 
             new_svg = extract_svg(response)
             description = extract_description(response)
 
             if new_svg is None:
-                print(f"no SVG extracted ({elapsed:.0f}s)")
-                log_entry(iteration, 0, 0, "skip", f"no SVG in response: {description[:80]}")
+                print(f"no SVG ({elapsed:.0f}s)")
+                log_entry(iteration, 0, 0, "skip", f"extraction failed: {description[:80]}")
                 consecutive_fails += 1
                 continue
 
-            # Backup current, write new
+            # Write new SVG, score it
             backup = current_svg
             SVG_FILE.write_text(new_svg, encoding="utf-8")
 
-            new_score = run_scorer()
+            new_score, new_breakdown = run_scorer()
 
             if new_score is None or new_score == 0:
                 SVG_FILE.write_text(backup, encoding="utf-8")
-                print(f"CRASH ({elapsed:.0f}s): {description[:60]}")
+                print(f"CRASH ({elapsed:.0f}s): {description[:55]}")
                 log_entry(iteration, 0, 0, "crash", description[:120])
                 consecutive_fails += 1
                 continue
@@ -294,33 +436,35 @@ def main():
             delta = new_score - best
 
             if delta > 0:
+                # KEEP — commit, snapshot, advance
                 best = new_score
-                git_commit(f"autoresearch #{iteration}: {description[:72]} (score: {new_score})")
+                best_breakdown = new_breakdown
+                msg = f"#{iteration} +{delta:.1f} -> {new_score:.1f}: {description[:60]}"
+                committed = git_commit(msg)
                 snapshot = OUTPUT_DIR / f"iter_{iteration:04d}_score_{new_score:.1f}.svg"
                 shutil.copy2(SVG_FILE, snapshot)
-                print(f"KEEP  {new_score} (+{delta:.1f}) ({elapsed:.0f}s): {description[:60]}")
+                c_mark = "G" if committed else "g"
+                print(f"KEEP [{c_mark}] {new_score:.1f} (+{delta:.1f}) ({elapsed:.0f}s): {description[:50]}")
                 log_entry(iteration, new_score, delta, "keep", description[:120])
                 consecutive_fails = 0
+                strategy_idx = 0
             else:
                 SVG_FILE.write_text(backup, encoding="utf-8")
                 label = "TIE " if delta == 0 else "DISC"
-                print(f"{label}  {new_score} ({delta:+.1f}) ({elapsed:.0f}s): {description[:60]}")
+                print(f"{label} {new_score:.1f} ({delta:+.1f}) ({elapsed:.0f}s): {description[:50]}")
                 log_entry(iteration, new_score, delta, "discard", description[:120])
                 consecutive_fails += 1
 
             if iteration % SUMMARY_EVERY == 0:
-                print_summary(iteration, baseline, best)
-
-            if consecutive_fails >= 8:
-                print("  [STUCK] 8+ consecutive fails — next prompt will push for radical change")
-                consecutive_fails = 0
+                print_summary(iteration, baseline_score, best)
 
     except KeyboardInterrupt:
         print(f"\n\nStopped at iteration {iteration}.")
-        print_summary(iteration, baseline, best)
-        print(f"Final SVG: {SVG_FILE.resolve()}")
+        print_summary(iteration, baseline_score, best)
+        print(f"SVG:       {SVG_FILE.resolve()}")
         print(f"Snapshots: {OUTPUT_DIR.resolve()}")
         print(f"Log:       {LOG_FILE.resolve()}")
+        print(f"Git:       git log --oneline")
 
 
 if __name__ == "__main__":
