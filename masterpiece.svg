@@ -76,6 +76,27 @@
       <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="15" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
     
+    <!-- New Depth Filter with Flood -->
+    <filter id="depth-flood" x="-100%" y="-100%" width="300%" height="300%">
+      <feFlood flood-color="#00ffff" flood-opacity="0.3" result="flood"/>
+      <feComposite in="flood" in2="SourceGraphic" operator="in" result="composite"/>
+      <feGaussianBlur stdDeviation="15" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Particle Glow Filter -->
+    <filter id="particle-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="blur"/>
+      </feMerge>
+    </filter>
+    
     <!-- Motion Path for particles -->
     <path id="motion-path" d="M 100 300 Q 200 150 300 300 T 500 300 T 700 300"/>
     <path id="motion-path-2" d="M 700 300 Q 600 450 500 300 T 300 300 T 100 300"/>
@@ -174,6 +195,14 @@
       </circle>
     </mask>
     
+    <!-- Particle mask 2 -->
+    <mask id="particle-mask-2">
+      <rect width="800" height="600" fill="#000"/>
+      <circle cx="400" cy="300" r="100" fill="#fff">
+        <animate attributeName="r" values="90;110;90" dur="5s" repeatCount="indefinite"/>
+      </circle>
+    </mask>
+    
     <!-- Symbol for particle -->
     <symbol id="particle-symbol" viewBox="0 0 20 20">
       <circle cx="10" cy="10" r="5" fill="currentColor">
@@ -218,6 +247,12 @@
     <path id="parallax-path-2" d="M 0 250 Q 200 280 400 250 T 800 250"/>
     <path id="parallax-path-3" d="M 0 350 Q 200 320 400 350 T 800 350"/>
     <path id="parallax-path-4" d="M 0 450 Q 200 480 400 450 T 800 450"/>
+    
+    <!-- Additional motion paths for depth -->
+    <path id="depth-path-5" d="M 0 200 Q 250 180 400 200 T 800 200"/>
+    <path id="depth-path-6" d="M 0 400 Q 250 420 400 400 T 800 400"/>
+    <path id="depth-path-7" d="M 150 0 Q 180 250 150 500 T 150 600"/>
+    <path id="depth-path-8" d="M 650 0 Q 620 250 650 500 T 650 600"/>
   </defs>
   
   <style>
@@ -291,6 +326,16 @@
     @keyframes waveFlow {
       0% { offset-distance: 0%; }
       100% { offset-distance: 100%; }
+    }
+    @keyframes particleWiggle {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(2px, -2px); }
+      50% { transform: translate(-2px, 2px); }
+      75% { transform: translate(2px, 2px); }
+    }
+    @keyframes ringExpand {
+      0%, 100% { r: 45; opacity: 0.25; }
+      50% { r: 55; opacity: 0.35; }
     }
   </style>
   
@@ -566,7 +611,7 @@
     </circle>
   </g>
   
-  <!-- NEW: Depth Parallax Layer with Motion Paths -->
+  <!-- Depth Parallax Layer with Motion Paths -->
   <g opacity="0.25" filter="url(#soft-blur)">
     <!-- Horizontal motion path 1 -->
     <circle cx="100" cy="100" r="6" fill="#00ffff" opacity="0.7">
@@ -603,7 +648,7 @@
     </circle>
   </g>
   
-  <!-- NEW: Parallax Layer with Multiple Motion Paths -->
+  <!-- Parallax Layer with Multiple Motion Paths -->
   <g opacity="0.2" filter="url(#parallax-filter)">
     <!-- Parallax path 1 - Left to right -->
     <circle cx="50" cy="150" r="4" fill="#00ffff" opacity="0.7">
@@ -638,6 +683,65 @@
     </circle>
     <circle cx="750" cy="450" r="3" fill="#ff6b9d" opacity="0.5">
       <animateMotion path="url(#parallax-path-4)" dur="38s" repeatCount="indefinite" rotate="auto" begin="12s"/>
+    </circle>
+  </g>
+  
+  <!-- NEW: Deeper Parallax Layer with Additional Motion Paths -->
+  <g opacity="0.15" filter="url(#depth-flood)">
+    <!-- Parallax path 5 - Upper middle -->
+    <circle cx="50" cy="200" r="3" fill="#00ffff" opacity="0.6">
+      <animateMotion path="url(#depth-path-5)" dur="35s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="750" cy="200" r="4" fill="#ff6b9d" opacity="0.5">
+      <animateMotion path="url(#depth-path-5)" dur="38s" repeatCount="indefinite" rotate="auto" begin="7s"/>
+    </circle>
+    
+    <!-- Parallax path 6 - Lower middle -->
+    <circle cx="50" cy="400" r="4" fill="#4a3f7a" opacity="0.5">
+      <animateMotion path="url(#depth-path-6)" dur="42s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="r" values="3;5;3" dur="3.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="750" cy="400" r="3" fill="#00ffff" opacity="0.6">
+      <animateMotion path="url(#depth-path-6)" dur="40s" repeatCount="indefinite" rotate="auto" begin="10s"/>
+    </circle>
+    
+    <!-- Vertical parallax path 3 -->
+    <circle cx="150" cy="600" r="3" fill="#ff6b9d" opacity="0.4">
+      <animateMotion path="url(#depth-path-7)" dur="45s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="150" cy="0" r="4" fill="#4a3f7a" opacity="0.5">
+      <animateMotion path="url(#depth-path-7)" dur="48s" repeatCount="indefinite" rotate="auto" begin="12s"/>
+    </circle>
+    
+    <!-- Vertical parallax path 4 -->
+    <circle cx="650" cy="600" r="3" fill="#00ffff" opacity="0.5">
+      <animateMotion path="url(#depth-path-8)" dur="43s" repeatCount="indefinite" rotate="auto"/>
+    </circle>
+    <circle cx="650" cy="0" r="4" fill="#ff6b9d" opacity="0.6">
+      <animateMotion path="url(#depth-path-8)" dur="46s" repeatCount="indefinite" rotate="auto" begin="15s"/>
+    </circle>
+  </g>
+  
+  <!-- NEW: Inner Particle Layer with Particle Glow -->
+  <g mask="url(#particle-mask-2)" opacity="0.5">
+    <circle cx="300" cy="250" r="4" fill="#00ffff" opacity="0.7" filter="url(#particle-glow)">
+      <animate attributeName="cx" values="300;315;300" dur="3.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="250;240;250" dur="3.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="500" cy="350" r="3" fill="#ff6b9d" opacity="0.6" filter="url(#particle-glow)">
+      <animate attributeName="cx" values="500;485;500" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="350;360;350" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="350" cy="350" r="5" fill="#4a3f7a" opacity="0.5" filter="url(#particle-glow)">
+      <animate attributeName="cx" values="350;365;350" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="350;340;350" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="450" cy="250" r="4" fill="#00ffff" opacity="0.6" filter="url(#particle-glow)">
+      <animate attributeName="cx" values="450;435;450" dur="3.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="250;260;250" dur="3.5s" repeatCount="indefinite"/>
     </circle>
   </g>
 </svg>
