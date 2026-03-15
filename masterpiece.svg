@@ -102,6 +102,49 @@
     </symbol>
   </defs>
   
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.1); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+    }
+    @keyframes rotateSlow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes breathe {
+      0%, 100% { r: 30; opacity: 0.6; }
+      50% { r: 40; opacity: 0.8; }
+    }
+    @keyframes shimmer {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    @keyframes drift {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(20px); }
+    }
+    @keyframes morph {
+      0%, 100% { rx: 5; ry: 5; }
+      50% { rx: 10; ry: 10; }
+    }
+    @keyframes waveMotion {
+      0%, 100% { transform: translateY(0) scaleX(1); }
+      50% { transform: translateY(5px) scaleX(1.02); }
+    }
+    @keyframes glowPulse {
+      0%, 100% { filter: drop-shadow(0 0 5px #00ffff); }
+      50% { filter: drop-shadow(0 0 20px #ff6b9d); }
+    }
+    @keyframes orbit {
+      0% { transform: rotate(0deg) translateX(150px) rotate(0deg); }
+      100% { transform: rotate(360deg) translateX(150px) rotate(-360deg); }
+    }
+  </style>
+  
   <!-- Background Layer (z-far) -->
   <g clip-path="url(#depth-clip)">
     <rect width="800" height="600" fill="url(#bg-grad)"/>
@@ -264,6 +307,22 @@
     </circle>
     <circle cx="400" cy="300" r="150" fill="none" stroke="#ff6b9d" stroke-width="0.5">
       <animateTransform attributeName="transform" type="rotate" from="360 400 300" to="0 400 300" dur="70s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- CSS Animation Applied Elements -->
+  <g>
+    <circle cx="100" cy="300" r="10" fill="#00ffff" opacity="0.7">
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="700" cy="300" r="10" fill="#ff6b9d" opacity="0.7">
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="400" cy="50" r="8" fill="#4a3f7a" opacity="0.6">
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="400" cy="550" r="8" fill="#00ffff" opacity="0.6">
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="1.5s" repeatCount="indefinite"/>
     </circle>
   </g>
 </svg>
