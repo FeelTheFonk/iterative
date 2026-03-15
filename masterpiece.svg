@@ -16,9 +16,30 @@
       </feMerge>
     </filter>
     
+    <!-- Advanced Organic Filter -->
+    <filter id="organic" x="-50%" y="-50%" width="200%" height="200%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="turbulence"/>
+      <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="30" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
     <!-- Soft Blur Filter -->
     <filter id="soft-blur" x="-25%" y="-25%" width="150%" height="150%">
       <feGaussianBlur stdDeviation="12" result="blur"/>
+    </filter>
+    
+    <!-- Deep Glow Filter -->
+    <filter id="deep-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="20" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
     
     <!-- Pattern for stars -->
@@ -38,24 +59,72 @@
       <stop offset="100%" stop-color="#ff6b9d"/>
     </linearGradient>
     
+    <!-- Wave Gradient -->
+    <linearGradient id="wave-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#4a3f7a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ff6b9d" stop-opacity="0.3"/>
+    </linearGradient>
+    
     <!-- Wave Pattern -->
     <path id="wave" d="M 0 30 Q 20 45 40 30 T 80 30 V 40 H 0 Z"/>
     <pattern id="wave-pattern" x="0" y="0" width="80" height="40" patternUnits="userSpaceOnUse">
       <use href="#wave" x="0" y="0"/>
       <use href="#wave" x="80" y="0"/>
     </pattern>
+    
+    <!-- Clip Path for depth masking -->
+    <clipPath id="depth-clip">
+      <path d="M 0 0 L 800 0 L 800 600 L 0 600 Z"/>
+    </clipPath>
+    
+    <!-- Mask for organic overlay -->
+    <mask id="organic-mask">
+      <rect width="800" height="600" fill="#000"/>
+      <circle cx="400" cy="300" r="200" fill="#fff">
+        <animate attributeName="r" values="180;220;180" dur="8s" repeatCount="indefinite"/>
+      </circle>
+    </mask>
+    
+    <!-- Symbol for particle -->
+    <symbol id="particle-symbol" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="5" fill="currentColor"/>
+    </symbol>
+    
+    <!-- Symbol for geometric shape -->
+    <symbol id="geo-shape" viewBox="0 0 40 40">
+      <polygon points="20,5 35,35 5,35" fill="none" stroke="currentColor" stroke-width="1"/>
+    </symbol>
+    
+    <!-- Symbol for orbit point -->
+    <symbol id="orbit-point" viewBox="0 0 10 10">
+      <circle cx="5" cy="5" r="3" fill="currentColor"/>
+    </symbol>
   </defs>
   
   <!-- Background Layer (z-far) -->
-  <rect width="800" height="600" fill="url(#bg-grad)"/>
-  
-  <!-- Distant Stars -->
-  <rect width="800" height="600" fill="url(#star-pattern)" opacity="0.3">
-    <animate attributeName="opacity" values="0.2;0.4;0.2" dur="4s" repeatCount="indefinite"/>
-  </rect>
+  <g clip-path="url(#depth-clip)">
+    <rect width="800" height="600" fill="url(#bg-grad)"/>
+    
+    <!-- Distant Stars with Twinkle -->
+    <rect width="800" height="600" fill="url(#star-pattern)" opacity="0.3">
+      <animate attributeName="opacity" values="0.2;0.4;0.2" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="x" values="0;-10;0" dur="20s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Distant Nebula Clouds -->
+    <circle cx="200" cy="150" r="100" fill="#00ffff" opacity="0.1" filter="url(#soft-blur)">
+      <animate attributeName="opacity" values="0.08;0.15;0.08" dur="15s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="90;110;90" dur="15s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="600" cy="450" r="120" fill="#ff6b9d" opacity="0.1" filter="url(#soft-blur)">
+      <animate attributeName="opacity" values="0.1;0.2;0.1" dur="18s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="100;140;100" dur="18s" repeatCount="indefinite"/>
+    </circle>
+  </g>
   
   <!-- Midground - Orbit Rings -->
-  <g opacity="0.4">
+  <g opacity="0.4" filter="url(#glow)">
     <circle cx="400" cy="300" r="250" fill="none" stroke="url(#bio-grad)" stroke-width="1">
       <animateTransform attributeName="transform" type="rotate" from="0 400 300" to="360 400 300" dur="60s" repeatCount="indefinite"/>
     </circle>
@@ -65,10 +134,18 @@
     <circle cx="400" cy="300" r="120" fill="none" stroke="#4a3f7a" stroke-width="0.5">
       <animateTransform attributeName="transform" type="rotate" from="0 400 300" to="360 400 300" dur="30s" repeatCount="indefinite"/>
     </circle>
+    
+    <!-- Orbit Points -->
+    <circle cx="650" cy="300" r="4" fill="#00ffff" opacity="0.8">
+      <animateTransform attributeName="transform" type="rotate" from="0 400 300" to="360 400 300" dur="20s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="150" cy="300" r="3" fill="#ff6b9d" opacity="0.6">
+      <animateTransform attributeName="transform" type="rotate" from="360 400 300" to="0 400 300" dur="25s" repeatCount="indefinite"/>
+    </circle>
   </g>
   
-  <!-- Midground - Geometric Shapes -->
-  <g opacity="0.6">
+  <!-- Midground - Geometric Shapes with Morphing -->
+  <g opacity="0.6" filter="url(#organic)">
     <polygon points="400,250 420,285 380,285" fill="url(#bio-grad)">
       <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3s" repeatCount="indefinite"/>
       <animateTransform attributeName="transform" type="translate" values="0,0;10,-5;0,0" dur="5s" repeatCount="indefinite"/>
@@ -83,10 +160,17 @@
     <circle cx="450" cy="250" r="12" fill="#ff6b9d">
       <animate attributeName="r" values="12;18;12" dur="2.5s" repeatCount="indefinite"/>
     </circle>
+    <!-- Additional geometric shapes -->
+    <rect x="200" y="200" width="15" height="25" fill="#00ffff" opacity="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="0 207 212" to="360 207 212" dur="12s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="600" y="400" width="20" height="20" fill="#ff6b9d" opacity="0.4">
+      <animate attributeName="opacity" values="0.3;0.6;0.3" dur="4s" repeatCount="indefinite"/>
+    </rect>
   </g>
   
   <!-- Foreground - Bioluminescent Particles -->
-  <g filter="url(#glow)">
+  <g filter="url(#glow)" mask="url(#organic-mask)">
     <circle cx="200" cy="150" r="8" fill="#00ffff" opacity="0.8">
       <animate attributeName="cx" values="200;220;200" dur="4s" repeatCount="indefinite"/>
       <animate attributeName="cy" values="150;140;150" dur="4s" repeatCount="indefinite"/>
@@ -110,6 +194,14 @@
       <animate attributeName="cx" values="150;160;150" dur="3.5s" repeatCount="indefinite"/>
       <animate attributeName="cy" values="350;345;350" dur="3.5s" repeatCount="indefinite"/>
     </circle>
+    <circle cx="500" cy="100" r="6" fill="#00ffff" opacity="0.6">
+      <animate attributeName="cx" values="500;520;500" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="100;90;100" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="100" cy="500" r="4" fill="#ff6b9d" opacity="0.5">
+      <animate attributeName="cx" values="100;120;100" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="500;510;500" dur="4s" repeatCount="indefinite"/>
+    </circle>
   </g>
   
   <!-- Foreground - Floating Geometric Elements -->
@@ -124,26 +216,54 @@
       <animate attributeName="opacity" values="0.3;0.6;0.3" dur="3s" repeatCount="indefinite"/>
       <animate attributeName="r" values="20;25;20" dur="4s" repeatCount="indefinite"/>
     </circle>
+    <!-- Additional floating elements -->
+    <rect x="300" y="450" width="10" height="30" fill="none" stroke="#00ffff" stroke-width="1">
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="5s" repeatCount="indefinite"/>
+    </rect>
+    <polygon points="650,300 670,330 630,330" fill="none" stroke="#ff6b9d" stroke-width="1">
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="4s" repeatCount="indefinite"/>
+    </polygon>
   </g>
   
   <!-- Foreground - Wave Patterns -->
   <g opacity="0.3">
     <rect width="800" height="50" fill="url(#wave-pattern)" y="500">
       <animate attributeName="y" values="500;520;500" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.25;0.35;0.25" dur="6s" repeatCount="indefinite"/>
     </rect>
     <rect width="800" height="40" fill="url(#wave-pattern)" y="550" opacity="0.2">
       <animate attributeName="y" values="550;570;550" dur="8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.15;0.25;0.15" dur="8s" repeatCount="indefinite"/>
     </rect>
+    <!-- Wave gradients -->
+    <path d="M 0 520 Q 200 540 400 520 T 800 520" fill="none" stroke="url(#wave-grad)" stroke-width="2">
+      <animate attributeName="d" values="M 0 520 Q 200 540 400 520 T 800 520; M 0 525 Q 200 545 400 525 T 800 525; M 0 520 Q 200 540 400 520 T 800 520" dur="6s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 560 Q 200 580 400 560 T 800 560" fill="none" stroke="url(#wave-grad)" stroke-width="2">
+      <animate attributeName="d" values="M 0 560 Q 200 580 400 560 T 800 560; M 0 565 Q 200 585 400 565 T 800 565; M 0 560 Q 200 580 400 560 T 800 560" dur="8s" repeatCount="indefinite"/>
+    </path>
   </g>
   
   <!-- Center Glow Core -->
-  <circle cx="400" cy="300" r="30" fill="url(#bio-grad)" opacity="0.6" filter="url(#glow)">
+  <circle cx="400" cy="300" r="30" fill="url(#bio-grad)" opacity="0.6" filter="url(#deep-glow)">
     <animate attributeName="opacity" values="0.4;0.8;0.4" dur="4s" repeatCount="indefinite"/>
     <animate attributeName="r" values="30;35;30" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="fill" values="#00ffff;#4a3f7a;#ff6b9d;#00ffff" dur="10s" repeatCount="indefinite"/>
   </circle>
   
   <!-- Subtle Motion -->
   <circle cx="400" cy="300" r="80" fill="none" stroke="url(#bio-grad)" stroke-width="1" opacity="0.2" filter="url(#soft-blur)">
     <animate attributeName="opacity" values="0.1;0.3;0.1" dur="5s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-dasharray" values="0,100;50,100;0,100" dur="4s" repeatCount="indefinite"/>
   </circle>
+  
+  <!-- Additional depth layer - distant rings -->
+  <g opacity="0.15" filter="url(#soft-blur)">
+    <circle cx="400" cy="300" r="200" fill="none" stroke="#00ffff" stroke-width="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="0 400 300" to="360 400 300" dur="90s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="400" cy="300" r="150" fill="none" stroke="#ff6b9d" stroke-width="0.5">
+      <animateTransform attributeName="transform" type="rotate" from="360 400 300" to="0 400 300" dur="70s" repeatCount="indefinite"/>
+    </circle>
+  </g>
 </svg>
