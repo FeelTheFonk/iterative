@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <radialGradient id="bg-grad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1a0533"/>
+      <stop offset="100%" stop-color="#0a0a1a"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="600" fill="url(#bg-grad)"/>
+
+  <!-- Single animated circle as seed -->
+  <circle cx="400" cy="300" r="20" fill="#7b4faa" opacity="0.8">
+    <animate attributeName="r" values="20;25;20" dur="3s" repeatCount="indefinite"/>
+  </circle>
+</svg>
