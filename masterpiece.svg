@@ -70,6 +70,12 @@
       </feMerge>
     </filter>
     
+    <!-- Parallax Filter -->
+    <filter id="parallax-filter" x="-50%" y="-50%" width="200%" height="200%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" result="turbulence"/>
+      <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="15" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    
     <!-- Motion Path for particles -->
     <path id="motion-path" d="M 100 300 Q 200 150 300 300 T 500 300 T 700 300"/>
     <path id="motion-path-2" d="M 700 300 Q 600 450 500 300 T 300 300 T 100 300"/>
@@ -206,6 +212,12 @@
     <path id="depth-path-2" d="M 0 500 Q 200 550 400 500 T 800 500"/>
     <path id="depth-path-3" d="M 100 0 Q 150 200 100 400 T 100 600"/>
     <path id="depth-path-4" d="M 700 0 Q 650 200 700 400 T 700 600"/>
+    
+    <!-- Parallax motion paths -->
+    <path id="parallax-path-1" d="M 0 150 Q 200 120 400 150 T 800 150"/>
+    <path id="parallax-path-2" d="M 0 250 Q 200 280 400 250 T 800 250"/>
+    <path id="parallax-path-3" d="M 0 350 Q 200 320 400 350 T 800 350"/>
+    <path id="parallax-path-4" d="M 0 450 Q 200 480 400 450 T 800 450"/>
   </defs>
   
   <style>
@@ -266,6 +278,19 @@
       0%, 100% { transform: translateY(0) translateX(0); }
       33% { transform: translateY(-10px) translateX(5px); }
       66% { transform: translateY(10px) translateX(-5px); }
+    }
+    @keyframes parallaxSlide {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(15px); }
+      100% { transform: translateX(0); }
+    }
+    @keyframes pulseScale {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    @keyframes waveFlow {
+      0% { offset-distance: 0%; }
+      100% { offset-distance: 100%; }
     }
   </style>
   
@@ -575,6 +600,44 @@
     <circle cx="400" cy="300" r="3" fill="#00ffff" opacity="0.6">
       <animateMotion path="M 400 300 m -50 0 a 50 50 0 1 0 100 0 a 50 50 0 1 0 -100 0" dur="12s" repeatCount="indefinite" rotate="auto"/>
       <animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- NEW: Parallax Layer with Multiple Motion Paths -->
+  <g opacity="0.2" filter="url(#parallax-filter)">
+    <!-- Parallax path 1 - Left to right -->
+    <circle cx="50" cy="150" r="4" fill="#00ffff" opacity="0.7">
+      <animateMotion path="url(#parallax-path-1)" dur="25s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="750" cy="150" r="3" fill="#ff6b9d" opacity="0.6">
+      <animateMotion path="url(#parallax-path-1)" dur="30s" repeatCount="indefinite" rotate="auto" begin="5s"/>
+    </circle>
+    
+    <!-- Parallax path 2 - Middle -->
+    <circle cx="50" cy="250" r="5" fill="#4a3f7a" opacity="0.5">
+      <animateMotion path="url(#parallax-path-2)" dur="35s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="r" values="4;6;4" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="750" cy="250" r="4" fill="#00ffff" opacity="0.6">
+      <animateMotion path="url(#parallax-path-2)" dur="28s" repeatCount="indefinite" rotate="auto" begin="10s"/>
+    </circle>
+    
+    <!-- Parallax path 3 - Center bottom -->
+    <circle cx="50" cy="350" r="3" fill="#ff6b9d" opacity="0.5">
+      <animateMotion path="url(#parallax-path-3)" dur="32s" repeatCount="indefinite" rotate="auto"/>
+      <animate attributeName="opacity" values="0.3;0.8;0.3" dur="5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="750" cy="350" r="4" fill="#4a3f7a" opacity="0.5">
+      <animateMotion path="url(#parallax-path-3)" dur="26s" repeatCount="indefinite" rotate="auto" begin="8s"/>
+    </circle>
+    
+    <!-- Parallax path 4 - Bottom -->
+    <circle cx="50" cy="450" r="4" fill="#00ffff" opacity="0.6">
+      <animateMotion path="url(#parallax-path-4)" dur="40s" repeatCount="indefinite" rotate="auto"/>
+    </circle>
+    <circle cx="750" cy="450" r="3" fill="#ff6b9d" opacity="0.5">
+      <animateMotion path="url(#parallax-path-4)" dur="38s" repeatCount="indefinite" rotate="auto" begin="12s"/>
     </circle>
   </g>
 </svg>
